@@ -248,88 +248,186 @@
       </div>
       <div class="cal-grid" id="calGrid"></div>
     </div>
-    <div class="card-box" id="calDayDetail">
-      <div class="card-title" id="calDayTitle">Selecione um dia</div>
-      <div id="calDayItems"><div class="empty">Clique em um dia para ver os lançamentos</div></div>
+    <div class="card-box">
+      <div style="font-size:13px;font-weight:500;color:#333;margin-bottom:10px;" id="calDayTitle">Selecione um dia</div>
+      <div class="item-list" id="calDayItems"></div>
     </div>
   </div>
 </div>
 
 <script>
+// === CONFIGURAÇÃO DO LOCALSTORAGE ===
+const STORAGE_KEY = 'controle_financeiro_data';
+
+// === VARIÁVEIS GLOBAIS ===
 const MONTHS=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-let salary=0, selCatVal='Outros', selDebtTypeVal='Empréstimo', selFlagVal='Visa';
-let expenses=[], incomes=[], debts=[], cards=[];
-let calYear=new Date().getFullYear(), calMonth=new Date().getMonth(), calSelDay=new Date().getDate();
-const today=new Date();
+let salary = 0;
+let selCatVal = 'Outros';
+let selDebtTypeVal = 'Empréstimo';
+let selFlagVal = 'Visa';
+let expenses = [];
+let incomes = [];
+let debts = [];
+let cards = [];
+let calYear = new Date().getFullYear();
+let calMonth = new Date().getMonth();
+let calSelDay = new Date().getDate();
+const today = new Date();
 
-function fmt(v){return 'R$ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
-function id(x){return document.getElementById(x);}
+const catColors = {
+  'Alimentação': '#ff6b6b',
+  'Transporte': '#3498db',
+  'Saúde': '#2ecc71',
+  'Lazer': '#9b59b6',
+  'Educação': '#f39c12',
+  'Casa': '#1abc9c',
+  'Outros': '#95a5a6'
+};
 
-// TAB
-function switchTab(name,btn){
-  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
-  btn.classList.add('active');
-  id('panel-'+name).classList.add('active');
-  if(name==='calendario') renderCal();
+// === FUNÇÕES AUXILIARES ===
+function fmt(v) {
+  return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-// SALÁRIO
-function startEditSal(){
-  id('salSec').style.display='none';
-  id('salEdit').style.display='flex';
-  id('salInput').value=salary||'';
+function id(x) {
+  return document.getElementById(x);
+}
+
+// === 💾 SISTEMA DE PERSISTÊNCIA (LOCALSTORAGE) ===
+function saveToStorage() {
+  try {
+    const data = {
+      salary: salary,
+      expenses: expenses,
+      incomes: incomes,
+      debts: debts,
+      cards: cards,
+      timestamp: new Date().toISOString()
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    console.log('✅ Dados salvos com sucesso');
+  } catch (error) {
+    console.error('❌ Erro ao salvar:', error);
+    alert('Erro ao salvar os dados. Verifique o espaço disponível.');
+  }
+}
+
+function loadFromStorage() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const data = JSON.parse(saved);
+      salary = data.salary || 0;
+      expenses = data.expenses || [];
+      incomes = data.incomes || [];
+      debts = data.debts || [];
+      cards = data.cards || [];
+      id('salVal').textContent = fmt(salary);
+      console.log('✅ Dados carregados do localStorage');
+    } else {
+      console.log('ℹ️ Nenhum dado anterior encontrado');
+    }
+  } catch (error) {
+    console.error('❌ Erro ao carregar dados:', error);
+    console.log('⚠️ Iniciando com dados vazios');
+  }
+}
+
+// === TABS E SALÁRIO ===
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  id('panel-' + name).classList.add('active');
+  if (name === 'calendario') renderCal();
+}
+
+function startEditSal() {
+  id('salSec').style.display = 'none';
+  id('salEdit').style.display = 'flex';
+  id('salInput').value = salary || '';
   id('salInput').focus();
 }
-function saveSal(){
-  salary=parseFloat(id('salInput').value)||0;
-  id('salVal').textContent=fmt(salary);
-  id('salSec').style.display='flex';
-  id('salEdit').style.display='none';
+
+function saveSal() {
+  salary = parseFloat(id('salInput').value) || 0;
+  id('salVal').textContent = fmt(salary);
+  id('salSec').style.display = 'flex';
+  id('salEdit').style.display = 'none';
   updateSummary();
-}
-function cancelSal(){
-  id('salSec').style.display='flex';
-  id('salEdit').style.display='none';
-}
-id('salInput').addEventListener('keydown',e=>{if(e.key==='Enter')saveSal();if(e.key==='Escape')cancelSal();});
-
-// SUMMARY
-function updateSummary(){
-  const totalExp=expenses.reduce((s,e)=>s+e.val,0)+cards.reduce((s,c)=>s+c.val,0);
-  const totalInc=salary+incomes.reduce((s,i)=>s+i.val,0);
-  const bal=totalInc-totalExp;
-  id('sumInc').textContent=fmt(totalInc);
-  id('sumExp').textContent=fmt(totalExp);
-  id('sumBal').textContent=fmt(bal);
-  id('sumBal').className='val '+(bal>=0?'val-green':'val-red');
+  saveToStorage();
 }
 
-// CATEGORIAS
-const catColors={'Alimentação':'#ff6b6b','Transporte':'#3498db','Saúde':'#2ecc71','Lazer':'#9b59b6','Educação':'#f39c12','Casa':'#1abc9c','Outros':'#95a5a6'};
-function selCat(btn,cat){
-  document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('sel'));
-  btn.classList.add('sel'); selCatVal=cat;
+function cancelSal() {
+  id('salSec').style.display = 'flex';
+  id('salEdit').style.display = 'none';
 }
 
-// DESPESAS
-function addExpense(){
-  const desc=id('expDesc').value.trim(), val=parseFloat(id('expVal').value);
-  if(!desc||!val||val<=0) return;
-  const now=new Date();
-  expenses.push({id:Date.now(),desc,val,cat:selCatVal,date:now.toISOString().split('T')[0]});
-  id('expDesc').value=''; id('expVal').value='';
-  renderExpenses(); updateSummary();
+// === RESUMO ===
+function updateSummary() {
+  const totalExp = expenses.reduce((s, e) => s + e.val, 0) + cards.reduce((s, c) => s + c.val, 0);
+  const totalInc = salary + incomes.reduce((s, i) => s + i.val, 0);
+  const bal = totalInc - totalExp;
+  
+  id('sumInc').textContent = fmt(totalInc);
+  id('sumExp').textContent = fmt(totalExp);
+  id('sumBal').textContent = fmt(bal);
+  id('sumBal').className = 'val ' + (bal >= 0 ? 'val-green' : 'val-red');
 }
-function delExpense(eid){expenses=expenses.filter(e=>e.id!==eid);renderExpenses();updateSummary();}
-function renderExpenses(){
-  const el=id('expList');
-  if(!expenses.length){el.innerHTML='<div class="empty">Nenhuma despesa registrada</div>';return;}
-  el.innerHTML=expenses.map(e=>`
+
+// === DESPESAS ===
+function selCat(btn, cat) {
+  document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  selCatVal = cat;
+}
+
+function addExpense() {
+  const desc = id('expDesc').value.trim();
+  const val = parseFloat(id('expVal').value);
+  
+  if (!desc || !val || val <= 0) {
+    alert('Preecha a descrição e o valor corretamente');
+    return;
+  }
+  
+  expenses.push({
+    id: Date.now(),
+    desc: desc,
+    val: val,
+    cat: selCatVal,
+    date: new Date().toISOString().split('T')[0]
+  });
+  
+  id('expDesc').value = '';
+  id('expVal').value = '';
+  renderExpenses();
+  updateSummary();
+  saveToStorage();
+}
+
+function delExpense(eid) {
+  expenses = expenses.filter(e => e.id !== eid);
+  renderExpenses();
+  updateSummary();
+  saveToStorage();
+}
+
+function renderExpenses() {
+  const el = id('expList');
+  if (!expenses.length) {
+    el.innerHTML = '<div class="empty">Nenhuma despesa registrada</div>';
+    return;
+  }
+  
+  el.innerHTML = expenses.map(e => `
     <div class="item-row">
       <div class="item-left">
-        <span class="item-cat-dot" style="background:${catColors[e.cat]||'#aaa'}"></span>
-        <div><div class="item-desc">${e.desc}</div><div class="item-sub">${e.cat} · ${e.date}</div></div>
+        <span class="item-cat-dot" style="background:${catColors[e.cat] || '#aaa'}"></span>
+        <div>
+          <div class="item-desc">${e.desc}</div>
+          <div class="item-sub">${e.cat}</div>
+        </div>
       </div>
       <div class="item-right">
         <span class="item-amount" style="color:#e74c3c">${fmt(e.val)}</span>
@@ -338,24 +436,52 @@ function renderExpenses(){
     </div>`).join('');
 }
 
-// RECEITAS
-function addIncome(){
-  const desc=id('incDesc').value.trim(), val=parseFloat(id('incVal').value);
-  if(!desc||!val||val<=0) return;
-  const now=new Date();
-  incomes.push({id:Date.now(),desc,val,date:now.toISOString().split('T')[0]});
-  id('incDesc').value=''; id('incVal').value='';
-  renderIncomes(); updateSummary();
+// === RECEITAS ===
+function addIncome() {
+  const desc = id('incDesc').value.trim();
+  const val = parseFloat(id('incVal').value);
+  
+  if (!desc || !val || val <= 0) {
+    alert('Preecha a descrição e o valor corretamente');
+    return;
+  }
+  
+  incomes.push({
+    id: Date.now(),
+    desc: desc,
+    val: val,
+    date: new Date().toISOString().split('T')[0]
+  });
+  
+  id('incDesc').value = '';
+  id('incVal').value = '';
+  renderIncomes();
+  updateSummary();
+  saveToStorage();
 }
-function delIncome(iid){incomes=incomes.filter(i=>i.id!==iid);renderIncomes();updateSummary();}
-function renderIncomes(){
-  const el=id('incList');
-  if(!incomes.length){el.innerHTML='<div class="empty">Nenhuma receita registrada</div>';return;}
-  el.innerHTML=incomes.map(i=>`
+
+function delIncome(iid) {
+  incomes = incomes.filter(i => i.id !== iid);
+  renderIncomes();
+  updateSummary();
+  saveToStorage();
+}
+
+function renderIncomes() {
+  const el = id('incList');
+  if (!incomes.length) {
+    el.innerHTML = '<div class="empty">Nenhuma receita registrada</div>';
+    return;
+  }
+  
+  el.innerHTML = incomes.map(i => `
     <div class="item-row">
       <div class="item-left">
         <span class="item-cat-dot" style="background:#2ecc71"></span>
-        <div><div class="item-desc">${i.desc}</div><div class="item-sub">${i.date}</div></div>
+        <div>
+          <div class="item-desc">${i.desc}</div>
+          <div class="item-sub">${i.date}</div>
+        </div>
       </div>
       <div class="item-right">
         <span class="item-amount" style="color:#2ecc71">${fmt(i.val)}</span>
@@ -364,76 +490,148 @@ function renderIncomes(){
     </div>`).join('');
 }
 
-// DÍVIDAS
-function selDebtType(btn,type){
-  document.querySelectorAll('.dtype-btn').forEach(b=>b.classList.remove('sel'));
-  btn.classList.add('sel'); selDebtTypeVal=type;
+// === DÍVIDAS ===
+function selDebtType(btn, type) {
+  document.querySelectorAll('.dtype-btn').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  selDebtTypeVal = type;
 }
-function addDebt(){
-  const desc=id('debtDesc').value.trim(), val=parseFloat(id('debtVal').value), date=id('debtDate').value;
-  if(!desc||!val||val<=0) return;
-  debts.push({id:Date.now(),desc,val,type:selDebtTypeVal,date,paid:false});
-  id('debtDesc').value=''; id('debtVal').value=''; id('debtDate').value='';
+
+function addDebt() {
+  const desc = id('debtDesc').value.trim();
+  const val = parseFloat(id('debtVal').value);
+  const date = id('debtDate').value;
+  
+  if (!desc || !val || val <= 0 || !date) {
+    alert('Preecha todos os campos corretamente');
+    return;
+  }
+  
+  debts.push({
+    id: Date.now(),
+    desc: desc,
+    val: val,
+    type: selDebtTypeVal,
+    date: date,
+    paid: false
+  });
+  
+  id('debtDesc').value = '';
+  id('debtVal').value = '';
+  id('debtDate').value = '';
   renderDebts();
+  saveToStorage();
 }
-function delDebt(did){debts=debts.filter(d=>d.id!==did);renderDebts();}
-function payDebt(did){const d=debts.find(x=>x.id===did);if(d)d.paid=!d.paid;renderDebts();}
-function renderDebts(){
-  const el=id('debtList');
-  if(!debts.length){el.innerHTML='<div class="empty">Nenhuma dívida registrada</div>';return;}
-  el.innerHTML=debts.map(d=>`
-    <div class="debt-item" style="margin-bottom:6px;${d.paid?'opacity:.6':''}">
+
+function payDebt(did) {
+  const d = debts.find(x => x.id === did);
+  if (d) {
+    d.paid = !d.paid;
+  }
+  renderDebts();
+  saveToStorage();
+}
+
+function delDebt(did) {
+  debts = debts.filter(d => d.id !== did);
+  renderDebts();
+  saveToStorage();
+}
+
+function renderDebts() {
+  const el = id('debtList');
+  if (!debts.length) {
+    el.innerHTML = '<div class="empty">Nenhuma dívida registrada</div>';
+    return;
+  }
+  
+  el.innerHTML = debts.map(d => `
+    <div class="debt-item" style="margin-bottom:6px;${d.paid ? 'opacity:.6' : ''}">
       <div>
-        <div style="font-size:13px;font-weight:500;color:#333">${d.desc}</div>
-        <div style="font-size:11px;color:#aaa">${d.type}${d.date?' · Venc: '+d.date:''}</div>
+        <div style="font-size:13px;font-weight:500">${d.desc}</div>
+        <div style="font-size:11px;color:#aaa">${d.type}</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;">
         <span style="font-size:14px;font-weight:600;color:#e67e22">${fmt(d.val)}</span>
-        <span class="debt-status ${d.paid?'debt-paid':'debt-pending'}">${d.paid?'Pago':'Pendente'}</span>
-        <button class="btn-pay" onclick="payDebt(${d.id})" style="${d.paid?'background:#aaa':''}">
-          ${d.paid?'Desfazer':'Pagar'}
-        </button>
+        <button class="btn-pay" onclick="payDebt(${d.id})">${d.paid ? 'Desfazer' : 'Pagar'}</button>
         <button class="item-del" onclick="delDebt(${d.id})">✕</button>
       </div>
     </div>`).join('');
 }
 
-// CARTÃO
-function selFlag(btn,flag){
-  document.querySelectorAll('.flag-btn').forEach(b=>b.classList.remove('sel'));
-  btn.classList.add('sel'); selFlagVal=flag;
+// === CARTÃO ===
+function selFlag(btn, flag) {
+  document.querySelectorAll('.flag-btn').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  selFlagVal = flag;
 }
-function addCard(){
-  const desc=id('cardDesc').value.trim(), val=parseFloat(id('cardVal').value);
-  const install=parseInt(id('cardInstall').value)||1;
-  const limit=parseFloat(id('cardLimit').value)||0;
-  if(!desc||!val||val<=0) return;
-  const perInst=val/install;
-  const now=new Date();
-  cards.push({id:Date.now(),desc,val,install,perInst,flag:selFlagVal,limit,date:now.toISOString().split('T')[0]});
-  id('cardDesc').value=''; id('cardVal').value=''; id('cardInstall').value='1';
-  renderCards(); updateSummary();
-}
-function delCard(cid){cards=cards.filter(c=>c.id!==cid);renderCards();updateSummary();}
-function renderCards(){
-  const el=id('cardList');
-  const totalUsed=cards.reduce((s,c)=>s+c.val,0);
-  const lastLimit=cards.length?cards[cards.length-1].limit:0;
-  if(lastLimit>0){
-    id('cardLimitBar').style.display='block';
-    const pct=Math.min(100,(totalUsed/lastLimit)*100);
-    id('limitBarFill').style.width=pct+'%';
-    id('limitBarFill').style.background=pct>80?'#e74c3c':'#9b59b6';
-    id('limitUsed').textContent=fmt(totalUsed);
-    id('limitTotal').textContent=fmt(lastLimit);
+
+function addCard() {
+  const desc = id('cardDesc').value.trim();
+  const val = parseFloat(id('cardVal').value);
+  const install = parseInt(id('cardInstall').value) || 1;
+  const limit = parseFloat(id('cardLimit').value) || 0;
+  
+  if (!desc || !val || val <= 0) {
+    alert('Preecha a descrição e o valor corretamente');
+    return;
   }
-  if(!cards.length){el.innerHTML='<div class="empty">Nenhuma compra registrada</div>';return;}
-  el.innerHTML=cards.map(c=>`
+  
+  const perInst = val / install;
+  const now = new Date();
+  
+  cards.push({
+    id: Date.now(),
+    desc: desc,
+    val: val,
+    install: install,
+    perInst: perInst,
+    flag: selFlagVal,
+    limit: limit,
+    date: now.toISOString().split('T')[0]
+  });
+  
+  id('cardDesc').value = '';
+  id('cardVal').value = '';
+  id('cardInstall').value = '1';
+  id('cardLimit').value = '';
+  renderCards();
+  updateSummary();
+  saveToStorage();
+}
+
+function delCard(cid) {
+  cards = cards.filter(c => c.id !== cid);
+  renderCards();
+  updateSummary();
+  saveToStorage();
+}
+
+function renderCards() {
+  const el = id('cardList');
+  const totalUsed = cards.reduce((s, c) => s + c.val, 0);
+  const lastLimit = cards.length ? cards[cards.length - 1].limit : 0;
+  
+  if (lastLimit > 0) {
+    id('cardLimitBar').style.display = 'block';
+    const pct = Math.min(100, (totalUsed / lastLimit) * 100);
+    id('limitBarFill').style.width = pct + '%';
+    id('limitBarFill').style.background = pct > 80 ? '#e74c3c' : '#9b59b6';
+    id('limitUsed').textContent = fmt(totalUsed);
+    id('limitTotal').textContent = fmt(lastLimit);
+  }
+  
+  if (!cards.length) {
+    el.innerHTML = '<div class="empty">Nenhuma compra registrada</div>';
+    return;
+  }
+  
+  el.innerHTML = cards.map(c => `
     <div class="card-item" style="margin-bottom:6px;">
       <div>
         <div style="font-size:13px;font-weight:500;color:#333;display:flex;align-items:center;gap:6px;">
           ${c.desc}
-          ${c.install>1?`<span class="installment-badge">${c.install}x de ${fmt(c.perInst)}</span>`:'<span class="installment-badge" style="background:#555">À vista</span>'}
+          ${c.install > 1 ? `<span class="installment-badge">${c.install}x de ${fmt(c.perInst)}</span>` : '<span class="installment-badge" style="background:#555">À vista</span>'}
         </div>
         <div style="font-size:11px;color:#aaa">${c.flag} · ${c.date}</div>
       </div>
@@ -444,197 +642,96 @@ function renderCards(){
     </div>`).join('');
 }
 
-// CALENDÁRIO
-function calNav(dir){
-  calMonth+=dir;
-  if(calMonth>11){calMonth=0;calYear++;}
-  if(calMonth<0){calMonth=11;calYear--;}
+// === CALENDÁRIO ===
+function calNav(dir) {
+  calMonth += dir;
+  if (calMonth > 11) {
+    calMonth = 0;
+    calYear++;
+  }
+  if (calMonth < 0) {
+    calMonth = 11;
+    calYear--;
+  }
   renderCal();
 }
-function getDayItems(y,m,d){
-  const dk=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+
+function getDayItems(y, m, d) {
+  const dk = y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
   return [
-    ...expenses.filter(e=>e.date===dk).map(e=>({...e,type:'exp'})),
-    ...incomes.filter(i=>i.date===dk).map(i=>({...i,type:'inc'})),
-    ...cards.filter(c=>c.date===dk).map(c=>({...c,type:'card'})),
-    ...debts.filter(db=>db.date===dk).map(db=>({...db,type:'debt'}))
+    ...expenses.filter(e => e.date === dk).map(e => ({ ...e, type: 'exp' })),
+    ...incomes.filter(i => i.date === dk).map(i => ({ ...i, type: 'inc' })),
+    ...cards.filter(c => c.date === dk).map(c => ({ ...c, type: 'card' })),
+    ...debts.filter(db => db.date === dk).map(db => ({ ...db, type: 'debt' }))
   ];
 }
-function selectCalDay(d){
-  calSelDay=d;
+
+function selectCalDay(d) {
+  calSelDay = d;
   renderCal();
-  const dk=calYear+'-'+String(calMonth+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
-  const items=getDayItems(calYear,calMonth,d);
-  id('calDayTitle').textContent=d+' de '+MONTHS[calMonth]+' '+calYear;
-  if(!items.length){id('calDayItems').innerHTML='<div class="empty">Sem lançamentos neste dia</div>';return;}
-  id('calDayItems').innerHTML=items.map(it=>{
-    if(it.type==='exp') return `<div class="item-row"><div class="item-left"><span class="item-cat-dot" style="background:${catColors[it.cat]||'#aaa'}"></span><div><div class="item-desc">${it.desc}</div><div class="item-sub">Despesa · ${it.cat}</div></div></div><div class="item-right"><span class="item-amount" style="color:#e74c3c">${fmt(it.val)}</span></div></div>`;
-    if(it.type==='inc') return `<div class="item-row"><div class="item-left"><span class="item-cat-dot" style="background:#2ecc71"></span><div><div class="item-desc">${it.desc}</div><div class="item-sub">Receita</div></div></div><div class="item-right"><span class="item-amount" style="color:#2ecc71">${fmt(it.val)}</span></div></div>`;
-    if(it.type==='card') return `<div class="item-row"><div class="item-left"><span class="item-cat-dot" style="background:#9b59b6"></span><div><div class="item-desc">${it.desc}</div><div class="item-sub">Cartão ${it.flag}${it.install>1?' · '+it.install+'x':''}</div></div></div><div class="item-right"><span class="item-amount" style="color:#9b59b6">${fmt(it.val)}</span></div></div>`;
-    if(it.type==='debt') return `<div class="item-row"><div class="item-left"><span class="item-cat-dot" style="background:#e67e22"></span><div><div class="item-desc">${it.desc}</div><div class="item-sub">Dívida · ${it.type2||it.type}</div></div></div><div class="item-right"><span class="item-amount" style="color:#e67e22">${fmt(it.val)}</span></div></div>`;
+  const items = getDayItems(calYear, calMonth, d);
+  id('calDayTitle').textContent = d + ' de ' + MONTHS[calMonth] + ' ' + calYear;
+  
+  if (!items.length) {
+    id('calDayItems').innerHTML = '<div class="empty">Sem lançamentos neste dia</div>';
+    return;
+  }
+  
+  id('calDayItems').innerHTML = items.map(it => {
+    if (it.type === 'exp') {
+      return `<div class="item-row"><div class="item-left"><span class="item-cat-dot" style="background:${catColors[it.cat] || '#aaa'}"></span><div><div class="item-desc">${it.desc}</div><div class="item-sub">Despesa · ${it.cat}</div></div></div><div class="item-right"><span class="item-amount" style="color:#e74c3c">${fmt(it.val)}</span></div></div>`;
+    }
+    if (it.type === 'inc') {
+      return `<div class="item-row"><div class="item-left"><span class="item-cat-dot" style="background:#2ecc71"></span><div><div class="item-desc">${it.desc}</div><div class="item-sub">Receita</div></div></div><div class="item-right"><span class="item-amount" style="color:#2ecc71">${fmt(it.val)}</span></div></div>`;
+    }
+    if (it.type === 'card') {
+      return `<div class="item-row"><div class="item-left"><span class="item-cat-dot" style="background:#9b59b6"></span><div><div class="item-desc">${it.desc}</div><div class="item-sub">Cartão ${it.flag}${it.install > 1 ? ' · ' + it.install + 'x' : ''}</div></div></div><div class="item-right"><span class="item-amount" style="color:#9b59b6">${fmt(it.val)}</span></div></div>`;
+    }
+    if (it.type === 'debt') {
+      return `<div class="item-row"><div class="item-left"><span class="item-cat-dot" style="background:#e67e22"></span><div><div class="item-desc">${it.desc}</div><div class="item-sub">Dívida · ${it.type}</div></div></div><div class="item-right"><span class="item-amount" style="color:#e67e22">${fmt(it.val)}</span></div></div>`;
+    }
     return '';
   }).join('');
 }
-<script>
-// --- VARIÁVEIS GLOBAIS ---
-const MONTHS=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-let salary=0, selCatVal='Outros', selDebtTypeVal='Empréstimo', selFlagVal='Visa';
-let expenses=[], incomes=[], debts=[], cards=[];
-let calYear=new Date().getFullYear(), calMonth=new Date().getMonth(), calSelDay=new Date().getDate();
-const today=new Date();
 
-function fmt(v){return 'R$ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
-function id(x){return document.getElementById(x);}
-
-// --- 💾 SISTEMA DE MEMÓRIA (LOCALSTORAGE) ---
-// Grava os dados no navegador do celular
-function saveToStorage() {
-    const data = { salary, expenses, incomes, debts, cards };
-    localStorage.setItem('meu_app_financas_data', JSON.stringify(data));
-}
-
-// Busca os dados salvos quando o app abre[cite: 2]
-function loadFromStorage() {
-    const saved = localStorage.getItem('meu_app_financas_data');
-    if (saved) {
-        const data = JSON.parse(saved);
-        salary = data.salary || 0;
-        expenses = data.expenses || [];
-        incomes = data.incomes || [];
-        debts = data.debts || [];
-        cards = data.cards || [];
-        id('salVal').textContent = fmt(salary);
-    }
-}
-
-// --- TABS E SALÁRIO ---
-function switchTab(name,btn){
-  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
-  btn.classList.add('active'); id('panel-'+name).classList.add('active');
-  if(name==='calendario') renderCal();
-}
-
-function startEditSal(){ id('salSec').style.display='none'; id('salEdit').style.display='flex'; id('salInput').value=salary||''; id('salInput').focus(); }
-function saveSal(){
-  salary=parseFloat(id('salInput').value)||0;
-  id('salVal').textContent=fmt(salary);
-  id('salSec').style.display='flex'; id('salEdit').style.display='none';
-  updateSummary(); saveToStorage(); // Salva o salário[cite: 2]
-}
-function cancelSal(){ id('salSec').style.display='flex'; id('salEdit').style.display='none'; }
-
-// --- RESUMO E CATEGORIAS ---
-function updateSummary(){
-  const totalExp=expenses.reduce((s,e)=>s+e.val,0)+cards.reduce((s,c)=>s+c.val,0);
-  const totalInc=salary+incomes.reduce((s,i)=>s+i.val,0);
-  const bal=totalInc-totalExp;
-  id('sumInc').textContent=fmt(totalInc);
-  id('sumExp').textContent=fmt(totalExp);
-  id('sumBal').textContent=fmt(bal);
-  id('sumBal').className='val '+(bal>=0?'val-green':'val-red');
-}
-
-const catColors={'Alimentação':'#ff6b6b','Transporte':'#3498db','Saúde':'#2ecc71','Lazer':'#9b59b6','Educação':'#f39c12','Casa':'#1abc9c','Outros':'#95a5a6'};
-function selCat(btn,cat){ document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('sel')); btn.classList.add('sel'); selCatVal=cat; }
-
-// --- DESPESAS ---
-function addExpense(){
-  const desc=id('expDesc').value.trim(), val=parseFloat(id('expVal').value);
-  if(!desc||!val||val<=0) return;
-  expenses.push({id:Date.now(),desc,val,cat:selCatVal,date:new Date().toISOString().split('T')[0]});
-  id('expDesc').value=''; id('expVal').value='';
-  renderExpenses(); updateSummary(); saveToStorage(); // Salva o gasto[cite: 2]
-}
-function delExpense(eid){ expenses=expenses.filter(e=>e.id!==eid); renderExpenses(); updateSummary(); saveToStorage(); }
-
-function renderExpenses(){
-  const el=id('expList');
-  if(!expenses.length){el.innerHTML='<div class="empty">Nenhuma despesa registrada</div>';return;}
-  el.innerHTML=expenses.map(e=>`
-    <div class="item-row">
-      <div class="item-left"><span class="item-cat-dot" style="background:${catColors[e.cat]||'#aaa'}"></span>
-      <div><div class="item-desc">${e.desc}</div><div class="item-sub">${e.cat}</div></div></div>
-      <div class="item-right"><span class="item-amount" style="color:#e74c3c">${fmt(e.val)}</span>
-      <button class="item-del" onclick="delExpense(${e.id})">✕</button></div>
-    </div>`).join('');
-}
-
-// --- RECEITAS ---
-function addIncome(){
-  const desc=id('incDesc').value.trim(), val=parseFloat(id('incVal').value);
-  if(!desc||!val||val<=0) return;
-  incomes.push({id:Date.now(),desc,val,date:new Date().toISOString().split('T')[0]});
-  id('incDesc').value=''; id('incVal').value='';
-  renderIncomes(); updateSummary(); saveToStorage(); // Salva a receita[cite: 2]
-}
-function delIncome(iid){ incomes=incomes.filter(i=>i.id!==iid); renderIncomes(); updateSummary(); saveToStorage(); }
-function renderIncomes(){
-  const el=id('incList');
-  if(!incomes.length){el.innerHTML='<div class="empty">Nenhuma receita registrada</div>';return;}
-  el.innerHTML=incomes.map(i=>`<div class="item-row"><div class="item-left"><span class="item-cat-dot" style="background:#2ecc71"></span><div><div class="item-desc">${i.desc}</div><div class="item-sub">${i.date}</div></div></div><div class="item-right"><span class="item-amount" style="color:#2ecc71">${fmt(i.val)}</span><button class="item-del" onclick="delIncome(${i.id})">✕</button></div></div>`).join('');
-}
-
-// --- DÍVIDAS ---
-function selDebtType(btn,type){ document.querySelectorAll('.dtype-btn').forEach(b=>b.classList.remove('sel')); btn.classList.add('sel'); selDebtTypeVal=type; }
-function addDebt(){
-  const desc=id('debtDesc').value.trim(), val=parseFloat(id('debtVal').value), date=id('debtDate').value;
-  if(!desc||!val||val<=0) return;
-  debts.push({id:Date.now(),desc,val,type:selDebtTypeVal,date,paid:false});
-  id('debtDesc').value=''; id('debtVal').value=''; renderDebts(); saveToStorage(); // Salva dívida[cite: 2]
-}
-function payDebt(did){ const d=debts.find(x=>x.id===did); if(d)d.paid=!d.paid; renderDebts(); saveToStorage(); }
-function delDebt(did){ debts=debts.filter(d=>d.id!==did); renderDebts(); saveToStorage(); }
-function renderDebts(){
-  const el=id('debtList');
-  if(!debts.length){el.innerHTML='<div class="empty">Nenhuma dívida registrada</div>';return;}
-  el.innerHTML=debts.map(d=>`<div class="debt-item" style="margin-bottom:6px;${d.paid?'opacity:.6':''}"><div><div style="font-size:13px;font-weight:500">${d.desc}</div><div style="font-size:11px;color:#aaa">${d.type}</div></div><div style="display:flex;align-items:center;gap:8px;"><span style="font-size:14px;font-weight:600;color:#e67e22">${fmt(d.val)}</span><button class="btn-pay" onclick="payDebt(${d.id})">${d.paid?'Desfazer':'Pagar'}</button><button class="item-del" onclick="delDebt(${d.id})">✕</button></div></div>`).join('');
-}
-
-// --- CARTÃO ---
-function selFlag(btn,flag){ document.querySelectorAll('.flag-btn').forEach(b=>b.classList.remove('sel')); btn.classList.add('sel'); selFlagVal=flag; }
-function addCard(){
-  const desc=id('cardDesc').value.trim(), val=parseFloat(id('cardVal').value), install=parseInt(id('cardInstall').value)||1;
-  if(!desc||!val||val<=0) return;
-  cards.push({id:Date.now(),desc,val,install,perInst:val/install,flag:selFlagVal,date:new Date().toISOString().split('T')[0]});
-  id('cardDesc').value=''; id('cardVal').value=''; renderCards(); updateSummary(); saveToStorage(); // Salva cartão[cite: 2]
-}
-function delCard(cid){ cards=cards.filter(c=>c.id!==cid); renderCards(); updateSummary(); saveToStorage(); }
-function renderCards(){
-  const el=id('cardList');
-  if(!cards.length){el.innerHTML='<div class="empty">Nenhuma compra registrada</div>';return;}
-  el.innerHTML=cards.map(c=>`<div class="card-item" style="margin-bottom:6px;"><div><div style="font-size:13px;font-weight:500">${c.desc} ${c.install}x</div><div style="font-size:11px;color:#aaa">${c.flag}</div></div><div style="display:flex;align-items:center;gap:8px;"><span style="font-size:14px;font-weight:600;color:#9b59b6">${fmt(c.val)}</span><button class="item-del" onclick="delCard(${c.id})">✕</button></div></div>`).join('');
-}
-
-// --- CALENDÁRIO ---
-function calNav(dir){ calMonth+=dir; if(calMonth>11){calMonth=0;calYear++;} if(calMonth<0){calMonth=11;calYear--;} renderCal(); }
-function getDayItems(y,m,d){
-  const dk=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
-  return [...expenses.filter(e=>e.date===dk).map(e=>({...e,type:'exp'})), ...incomes.filter(i=>i.date===dk).map(i=>({...i,type:'inc'})), ...cards.filter(c=>c.date===dk).map(c=>({...c,type:'card'})), ...debts.filter(db=>db.date===dk).map(db=>({...db,type:'debt'}))];
-}
-function selectCalDay(d){
-  calSelDay=d; renderCal(); const items=getDayItems(calYear,calMonth,d);
-  id('calDayTitle').textContent=d+' de '+MONTHS[calMonth];
-  if(!items.length){id('calDayItems').innerHTML='<div class="empty">Sem lançamentos</div>';return;}
-  id('calDayItems').innerHTML=items.map(it=>`<div class="item-row"><div class="item-desc">${it.desc}</div><div class="item-amount">${fmt(it.val)}</div></div>`).join('');
-}
-function renderCal(){
-  id('calTitle').textContent=MONTHS[calMonth]+' '+calYear;
-  const first=new Date(calYear,calMonth,1).getDay(), days=new Date(calYear,calMonth+1,0).getDate(), prev=new Date(calYear,calMonth,0).getDate();
-  let html='';
-  for(let i=first-1;i>=0;i--) html+=`<div class="cal-cell other"><span class="dnum">${prev-i}</span></div>`;
-  for(let d=1;d<=days;d++){
-    const isT=d===today.getDate()&&calMonth===today.getMonth()&&calYear===today.getFullYear(), isSel=d===calSelDay;
-    const items=getDayItems(calYear,calMonth,d), dots=items.map(it=>`<span class="ddot ${it.type==='exp'?'dot-e':it.type==='inc'?'dot-i':'dot-c'}"></span>`).slice(0,4).join('');
-    html+=`<div class="cal-cell ${isT?'today':''} ${isSel?'sel-day':''}" onclick="selectCalDay(${d})"><span class="dnum">${d}</span><div class="dot-row">${dots}</div></div>`;
+function renderCal() {
+  id('calTitle').textContent = MONTHS[calMonth] + ' ' + calYear;
+  const first = new Date(calYear, calMonth, 1).getDay();
+  const days = new Date(calYear, calMonth + 1, 0).getDate();
+  const prev = new Date(calYear, calMonth, 0).getDate();
+  
+  let html = '';
+  for (let i = first - 1; i >= 0; i--) {
+    html += `<div class="cal-cell other"><span class="dnum">${prev - i}</span></div>`;
   }
-  id('calGrid').innerHTML=html;
+  
+  for (let d = 1; d <= days; d++) {
+    const isT = d === today.getDate() && calMonth === today.getMonth() && calYear === today.getFullYear();
+    const isSel = d === calSelDay;
+    const items = getDayItems(calYear, calMonth, d);
+    const dots = items.map(it => `<span class="ddot ${it.type === 'exp' ? 'dot-e' : it.type === 'inc' ? 'dot-i' : it.type === 'card' ? 'dot-c' : 'dot-d'}"></span>`).slice(0, 4).join('');
+    html += `<div class="cal-cell ${isT ? 'today' : ''} ${isSel ? 'sel-day' : ''}" onclick="selectCalDay(${d})"><span class="dnum">${d}</span><div class="dot-row">${dots}</div></div>`;
+  }
+  
+  id('calGrid').innerHTML = html;
 }
 
-// --- 🚀 INICIALIZAÇÃO AUTOMÁTICA ---
-window.onload = function() {
-    loadFromStorage(); // Carrega os dados salvos do celular[cite: 2]
-    renderExpenses(); renderIncomes(); renderDebts(); renderCards();
-    updateSummary(); renderCal(); selectCalDay(calSelDay);
-};
+// === 🚀 INICIALIZAÇÃO ===
+window.addEventListener('load', function() {
+  console.log('🚀 App iniciando...');
+  loadFromStorage();
+  renderExpenses();
+  renderIncomes();
+  renderDebts();
+  renderCards();
+  updateSummary();
+  renderCal();
+  selectCalDay(calSelDay);
+  console.log('✅ App pronto!');
+});
+
+// === SALVAR ANTES DE FECHAR ===
+window.addEventListener('beforeunload', function() {
+  saveToStorage();
+});
 </script>
