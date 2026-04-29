@@ -475,25 +475,25 @@ function selectCalDay(d){
     return '';
   }).join('');
 }
-  <script>
+<script>
+// --- VARIÁVEIS GLOBAIS ---
 const MONTHS=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 let salary=0, selCatVal='Outros', selDebtTypeVal='Empréstimo', selFlagVal='Visa';
 let expenses=[], incomes=[], debts=[], cards=[];
 let calYear=new Date().getFullYear(), calMonth=new Date().getMonth(), calSelDay=new Date().getDate();
 const today=new Date();
 
-// --- 💾 FUNÇÕES DE MEMÓRIA (LOCALSTORAGE) ---
+function fmt(v){return 'R$ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function id(x){return document.getElementById(x);}
+
+// --- 💾 SISTEMA DE MEMÓRIA (LOCALSTORAGE) ---
+// Grava os dados no navegador do celular
 function saveToStorage() {
-    const data = {
-        salary,
-        expenses,
-        incomes,
-        debts,
-        cards
-    };
+    const data = { salary, expenses, incomes, debts, cards };
     localStorage.setItem('meu_app_financas_data', JSON.stringify(data));
 }
 
+// Busca os dados salvos quando o app abre[cite: 2]
 function loadFromStorage() {
     const saved = localStorage.getItem('meu_app_financas_data');
     if (saved) {
@@ -503,127 +503,138 @@ function loadFromStorage() {
         incomes = data.incomes || [];
         debts = data.debts || [];
         cards = data.cards || [];
-        
-        // Atualiza a interface com o salário carregado
         id('salVal').textContent = fmt(salary);
     }
 }
 
-function fmt(v){return 'R$ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
-function id(x){return document.getElementById(x);}
+// --- TABS E SALÁRIO ---
+function switchTab(name,btn){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  btn.classList.add('active'); id('panel-'+name).classList.add('active');
+  if(name==='calendario') renderCal();
+}
 
-// --- ⚙️ MODIFICAÇÕES NAS SUAS FUNÇÕES PARA SALVAR ---
-
+function startEditSal(){ id('salSec').style.display='none'; id('salEdit').style.display='flex'; id('salInput').value=salary||''; id('salInput').focus(); }
 function saveSal(){
   salary=parseFloat(id('salInput').value)||0;
   id('salVal').textContent=fmt(salary);
-  id('salSec').style.display='flex';
-  id('salEdit').style.display='none';
-  updateSummary();
-  saveToStorage(); // Salva o salário no celular
+  id('salSec').style.display='flex'; id('salEdit').style.display='none';
+  updateSummary(); saveToStorage(); // Salva o salário[cite: 2]
+}
+function cancelSal(){ id('salSec').style.display='flex'; id('salEdit').style.display='none'; }
+
+// --- RESUMO E CATEGORIAS ---
+function updateSummary(){
+  const totalExp=expenses.reduce((s,e)=>s+e.val,0)+cards.reduce((s,c)=>s+c.val,0);
+  const totalInc=salary+incomes.reduce((s,i)=>s+i.val,0);
+  const bal=totalInc-totalExp;
+  id('sumInc').textContent=fmt(totalInc);
+  id('sumExp').textContent=fmt(totalExp);
+  id('sumBal').textContent=fmt(bal);
+  id('sumBal').className='val '+(bal>=0?'val-green':'val-red');
 }
 
+const catColors={'Alimentação':'#ff6b6b','Transporte':'#3498db','Saúde':'#2ecc71','Lazer':'#9b59b6','Educação':'#f39c12','Casa':'#1abc9c','Outros':'#95a5a6'};
+function selCat(btn,cat){ document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('sel')); btn.classList.add('sel'); selCatVal=cat; }
+
+// --- DESPESAS ---
 function addExpense(){
   const desc=id('expDesc').value.trim(), val=parseFloat(id('expVal').value);
   if(!desc||!val||val<=0) return;
-  const now=new Date();
-  expenses.push({id:Date.now(),desc,val,cat:selCatVal,date:now.toISOString().split('T')[0]});
+  expenses.push({id:Date.now(),desc,val,cat:selCatVal,date:new Date().toISOString().split('T')[0]});
   id('expDesc').value=''; id('expVal').value='';
-  renderExpenses(); 
-  updateSummary();
-  saveToStorage(); // Salva o gasto no celular
+  renderExpenses(); updateSummary(); saveToStorage(); // Salva o gasto[cite: 2]
+}
+function delExpense(eid){ expenses=expenses.filter(e=>e.id!==eid); renderExpenses(); updateSummary(); saveToStorage(); }
+
+function renderExpenses(){
+  const el=id('expList');
+  if(!expenses.length){el.innerHTML='<div class="empty">Nenhuma despesa registrada</div>';return;}
+  el.innerHTML=expenses.map(e=>`
+    <div class="item-row">
+      <div class="item-left"><span class="item-cat-dot" style="background:${catColors[e.cat]||'#aaa'}"></span>
+      <div><div class="item-desc">${e.desc}</div><div class="item-sub">${e.cat}</div></div></div>
+      <div class="item-right"><span class="item-amount" style="color:#e74c3c">${fmt(e.val)}</span>
+      <button class="item-del" onclick="delExpense(${e.id})">✕</button></div>
+    </div>`).join('');
 }
 
-function delExpense(eid){
-    expenses=expenses.filter(e=>e.id!==eid);
-    renderExpenses();
-    updateSummary();
-    saveToStorage(); 
-}
-
+// --- RECEITAS ---
 function addIncome(){
   const desc=id('incDesc').value.trim(), val=parseFloat(id('incVal').value);
   if(!desc||!val||val<=0) return;
-  const now=new Date();
-  incomes.push({id:Date.now(),desc,val,date:now.toISOString().split('T')[0]});
+  incomes.push({id:Date.now(),desc,val,date:new Date().toISOString().split('T')[0]});
   id('incDesc').value=''; id('incVal').value='';
-  renderIncomes(); 
-  updateSummary();
-  saveToStorage(); // Salva a renda
+  renderIncomes(); updateSummary(); saveToStorage(); // Salva a receita[cite: 2]
+}
+function delIncome(iid){ incomes=incomes.filter(i=>i.id!==iid); renderIncomes(); updateSummary(); saveToStorage(); }
+function renderIncomes(){
+  const el=id('incList');
+  if(!incomes.length){el.innerHTML='<div class="empty">Nenhuma receita registrada</div>';return;}
+  el.innerHTML=incomes.map(i=>`<div class="item-row"><div class="item-left"><span class="item-cat-dot" style="background:#2ecc71"></span><div><div class="item-desc">${i.desc}</div><div class="item-sub">${i.date}</div></div></div><div class="item-right"><span class="item-amount" style="color:#2ecc71">${fmt(i.val)}</span><button class="item-del" onclick="delIncome(${i.id})">✕</button></div></div>`).join('');
 }
 
-function delIncome(iid){incomes=incomes.filter(i=>i.id!==iid);renderIncomes();updateSummary();saveToStorage();}
-
+// --- DÍVIDAS ---
+function selDebtType(btn,type){ document.querySelectorAll('.dtype-btn').forEach(b=>b.classList.remove('sel')); btn.classList.add('sel'); selDebtTypeVal=type; }
 function addDebt(){
   const desc=id('debtDesc').value.trim(), val=parseFloat(id('debtVal').value), date=id('debtDate').value;
   if(!desc||!val||val<=0) return;
   debts.push({id:Date.now(),desc,val,type:selDebtTypeVal,date,paid:false});
-  id('debtDesc').value=''; id('debtVal').value=''; id('debtDate').value='';
-  renderDebts();
-  saveToStorage(); // Salva a dívida
+  id('debtDesc').value=''; id('debtVal').value=''; renderDebts(); saveToStorage(); // Salva dívida[cite: 2]
+}
+function payDebt(did){ const d=debts.find(x=>x.id===did); if(d)d.paid=!d.paid; renderDebts(); saveToStorage(); }
+function delDebt(did){ debts=debts.filter(d=>d.id!==did); renderDebts(); saveToStorage(); }
+function renderDebts(){
+  const el=id('debtList');
+  if(!debts.length){el.innerHTML='<div class="empty">Nenhuma dívida registrada</div>';return;}
+  el.innerHTML=debts.map(d=>`<div class="debt-item" style="margin-bottom:6px;${d.paid?'opacity:.6':''}"><div><div style="font-size:13px;font-weight:500">${d.desc}</div><div style="font-size:11px;color:#aaa">${d.type}</div></div><div style="display:flex;align-items:center;gap:8px;"><span style="font-size:14px;font-weight:600;color:#e67e22">${fmt(d.val)}</span><button class="btn-pay" onclick="payDebt(${d.id})">${d.paid?'Desfazer':'Pagar'}</button><button class="item-del" onclick="delDebt(${d.id})">✕</button></div></div>`).join('');
 }
 
-function payDebt(did){
-    const d=debts.find(x=>x.id===did);
-    if(d)d.paid=!d.paid;
-    renderDebts();
-    saveToStorage();
-}
-
-function delDebt(did){debts=debts.filter(d=>d.id!==did);renderDebts();saveToStorage();}
-
+// --- CARTÃO ---
+function selFlag(btn,flag){ document.querySelectorAll('.flag-btn').forEach(b=>b.classList.remove('sel')); btn.classList.add('sel'); selFlagVal=flag; }
 function addCard(){
-  const desc=id('cardDesc').value.trim(), val=parseFloat(id('cardVal').value);
-  const install=parseInt(id('cardInstall').value)||1;
-  const limit=parseFloat(id('cardLimit').value)||0;
+  const desc=id('cardDesc').value.trim(), val=parseFloat(id('cardVal').value), install=parseInt(id('cardInstall').value)||1;
   if(!desc||!val||val<=0) return;
-  const perInst=val/install;
-  const now=new Date();
-  cards.push({id:Date.now(),desc,val,install,perInst,flag:selFlagVal,limit,date:now.toISOString().split('T')[0]});
-  id('cardDesc').value=''; id('cardVal').value=''; id('cardInstall').value='1';
-  renderCards(); 
-  updateSummary();
-  saveToStorage(); // Salva o cartão
+  cards.push({id:Date.now(),desc,val,install,perInst:val/install,flag:selFlagVal,date:new Date().toISOString().split('T')[0]});
+  id('cardDesc').value=''; id('cardVal').value=''; renderCards(); updateSummary(); saveToStorage(); // Salva cartão[cite: 2]
+}
+function delCard(cid){ cards=cards.filter(c=>c.id!==cid); renderCards(); updateSummary(); saveToStorage(); }
+function renderCards(){
+  const el=id('cardList');
+  if(!cards.length){el.innerHTML='<div class="empty">Nenhuma compra registrada</div>';return;}
+  el.innerHTML=cards.map(c=>`<div class="card-item" style="margin-bottom:6px;"><div><div style="font-size:13px;font-weight:500">${c.desc} ${c.install}x</div><div style="font-size:11px;color:#aaa">${c.flag}</div></div><div style="display:flex;align-items:center;gap:8px;"><span style="font-size:14px;font-weight:600;color:#9b59b6">${fmt(c.val)}</span><button class="item-del" onclick="delCard(${c.id})">✕</button></div></div>`).join('');
 }
 
-function delCard(cid){cards=cards.filter(c=>c.id!==cid);renderCards();updateSummary();saveToStorage();}
-
-// --- 🚀 INICIALIZAÇÃO AO ABRIR O APP ---
-window.onload = function() {
-    loadFromStorage(); // Carrega tudo do celular
-    renderExpenses();
-    renderIncomes();
-    renderDebts();
-    renderCards();
-    updateSummary();
-    renderCal();
-    selectCalDay(calSelDay);
-};
-
-// ... Mantenha suas funções de Calendário, Tabs, etc., abaixo iguais ...
-</script>
+// --- CALENDÁRIO ---
+function calNav(dir){ calMonth+=dir; if(calMonth>11){calMonth=0;calYear++;} if(calMonth<0){calMonth=11;calYear--;} renderCal(); }
+function getDayItems(y,m,d){
+  const dk=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+  return [...expenses.filter(e=>e.date===dk).map(e=>({...e,type:'exp'})), ...incomes.filter(i=>i.date===dk).map(i=>({...i,type:'inc'})), ...cards.filter(c=>c.date===dk).map(c=>({...c,type:'card'})), ...debts.filter(db=>db.date===dk).map(db=>({...db,type:'debt'}))];
+}
+function selectCalDay(d){
+  calSelDay=d; renderCal(); const items=getDayItems(calYear,calMonth,d);
+  id('calDayTitle').textContent=d+' de '+MONTHS[calMonth];
+  if(!items.length){id('calDayItems').innerHTML='<div class="empty">Sem lançamentos</div>';return;}
+  id('calDayItems').innerHTML=items.map(it=>`<div class="item-row"><div class="item-desc">${it.desc}</div><div class="item-amount">${fmt(it.val)}</div></div>`).join('');
+}
 function renderCal(){
   id('calTitle').textContent=MONTHS[calMonth]+' '+calYear;
-  const first=new Date(calYear,calMonth,1).getDay();
-  const days=new Date(calYear,calMonth+1,0).getDate();
-  const prev=new Date(calYear,calMonth,0).getDate();
+  const first=new Date(calYear,calMonth,1).getDay(), days=new Date(calYear,calMonth+1,0).getDate(), prev=new Date(calYear,calMonth,0).getDate();
   let html='';
   for(let i=first-1;i>=0;i--) html+=`<div class="cal-cell other"><span class="dnum">${prev-i}</span></div>`;
   for(let d=1;d<=days;d++){
-    const isT=d===today.getDate()&&calMonth===today.getMonth()&&calYear===today.getFullYear();
-    const isSel=d===calSelDay;
-    const items=getDayItems(calYear,calMonth,d);
-    const dots=items.map(it=>`<span class="ddot ${it.type==='exp'?'dot-e':it.type==='inc'?'dot-i':it.type==='debt'?'dot-d':'dot-c'}"></span>`).slice(0,4).join('');
-    html+=`<div class="cal-cell${isT?' today':''}${isSel?' sel-day':''}" onclick="selectCalDay(${d})">
-      <span class="dnum">${d}</span>
-      <div class="dot-row">${dots}</div>
-    </div>`;
+    const isT=d===today.getDate()&&calMonth===today.getMonth()&&calYear===today.getFullYear(), isSel=d===calSelDay;
+    const items=getDayItems(calYear,calMonth,d), dots=items.map(it=>`<span class="ddot ${it.type==='exp'?'dot-e':it.type==='inc'?'dot-i':'dot-c'}"></span>`).slice(0,4).join('');
+    html+=`<div class="cal-cell ${isT?'today':''} ${isSel?'sel-day':''}" onclick="selectCalDay(${d})"><span class="dnum">${d}</span><div class="dot-row">${dots}</div></div>`;
   }
-  const used=first+days; const rem=used%7===0?0:7-(used%7);
-  for(let i=1;i<=rem;i++) html+=`<div class="cal-cell other"><span class="dnum">${i}</span></div>`;
   id('calGrid').innerHTML=html;
 }
 
-renderCal();
-selectCalDay(calSelDay);
+// --- 🚀 INICIALIZAÇÃO AUTOMÁTICA ---
+window.onload = function() {
+    loadFromStorage(); // Carrega os dados salvos do celular[cite: 2]
+    renderExpenses(); renderIncomes(); renderDebts(); renderCards();
+    updateSummary(); renderCal(); selectCalDay(calSelDay);
+};
 </script>
