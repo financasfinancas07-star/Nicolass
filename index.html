@@ -475,6 +475,133 @@ function selectCalDay(d){
     return '';
   }).join('');
 }
+  <script>
+const MONTHS=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+let salary=0, selCatVal='Outros', selDebtTypeVal='Empréstimo', selFlagVal='Visa';
+let expenses=[], incomes=[], debts=[], cards=[];
+let calYear=new Date().getFullYear(), calMonth=new Date().getMonth(), calSelDay=new Date().getDate();
+const today=new Date();
+
+// --- 💾 FUNÇÕES DE MEMÓRIA (LOCALSTORAGE) ---
+function saveToStorage() {
+    const data = {
+        salary,
+        expenses,
+        incomes,
+        debts,
+        cards
+    };
+    localStorage.setItem('meu_app_financas_data', JSON.stringify(data));
+}
+
+function loadFromStorage() {
+    const saved = localStorage.getItem('meu_app_financas_data');
+    if (saved) {
+        const data = JSON.parse(saved);
+        salary = data.salary || 0;
+        expenses = data.expenses || [];
+        incomes = data.incomes || [];
+        debts = data.debts || [];
+        cards = data.cards || [];
+        
+        // Atualiza a interface com o salário carregado
+        id('salVal').textContent = fmt(salary);
+    }
+}
+
+function fmt(v){return 'R$ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function id(x){return document.getElementById(x);}
+
+// --- ⚙️ MODIFICAÇÕES NAS SUAS FUNÇÕES PARA SALVAR ---
+
+function saveSal(){
+  salary=parseFloat(id('salInput').value)||0;
+  id('salVal').textContent=fmt(salary);
+  id('salSec').style.display='flex';
+  id('salEdit').style.display='none';
+  updateSummary();
+  saveToStorage(); // Salva o salário no celular
+}
+
+function addExpense(){
+  const desc=id('expDesc').value.trim(), val=parseFloat(id('expVal').value);
+  if(!desc||!val||val<=0) return;
+  const now=new Date();
+  expenses.push({id:Date.now(),desc,val,cat:selCatVal,date:now.toISOString().split('T')[0]});
+  id('expDesc').value=''; id('expVal').value='';
+  renderExpenses(); 
+  updateSummary();
+  saveToStorage(); // Salva o gasto no celular
+}
+
+function delExpense(eid){
+    expenses=expenses.filter(e=>e.id!==eid);
+    renderExpenses();
+    updateSummary();
+    saveToStorage(); 
+}
+
+function addIncome(){
+  const desc=id('incDesc').value.trim(), val=parseFloat(id('incVal').value);
+  if(!desc||!val||val<=0) return;
+  const now=new Date();
+  incomes.push({id:Date.now(),desc,val,date:now.toISOString().split('T')[0]});
+  id('incDesc').value=''; id('incVal').value='';
+  renderIncomes(); 
+  updateSummary();
+  saveToStorage(); // Salva a renda
+}
+
+function delIncome(iid){incomes=incomes.filter(i=>i.id!==iid);renderIncomes();updateSummary();saveToStorage();}
+
+function addDebt(){
+  const desc=id('debtDesc').value.trim(), val=parseFloat(id('debtVal').value), date=id('debtDate').value;
+  if(!desc||!val||val<=0) return;
+  debts.push({id:Date.now(),desc,val,type:selDebtTypeVal,date,paid:false});
+  id('debtDesc').value=''; id('debtVal').value=''; id('debtDate').value='';
+  renderDebts();
+  saveToStorage(); // Salva a dívida
+}
+
+function payDebt(did){
+    const d=debts.find(x=>x.id===did);
+    if(d)d.paid=!d.paid;
+    renderDebts();
+    saveToStorage();
+}
+
+function delDebt(did){debts=debts.filter(d=>d.id!==did);renderDebts();saveToStorage();}
+
+function addCard(){
+  const desc=id('cardDesc').value.trim(), val=parseFloat(id('cardVal').value);
+  const install=parseInt(id('cardInstall').value)||1;
+  const limit=parseFloat(id('cardLimit').value)||0;
+  if(!desc||!val||val<=0) return;
+  const perInst=val/install;
+  const now=new Date();
+  cards.push({id:Date.now(),desc,val,install,perInst,flag:selFlagVal,limit,date:now.toISOString().split('T')[0]});
+  id('cardDesc').value=''; id('cardVal').value=''; id('cardInstall').value='1';
+  renderCards(); 
+  updateSummary();
+  saveToStorage(); // Salva o cartão
+}
+
+function delCard(cid){cards=cards.filter(c=>c.id!==cid);renderCards();updateSummary();saveToStorage();}
+
+// --- 🚀 INICIALIZAÇÃO AO ABRIR O APP ---
+window.onload = function() {
+    loadFromStorage(); // Carrega tudo do celular
+    renderExpenses();
+    renderIncomes();
+    renderDebts();
+    renderCards();
+    updateSummary();
+    renderCal();
+    selectCalDay(calSelDay);
+};
+
+// ... Mantenha suas funções de Calendário, Tabs, etc., abaixo iguais ...
+</script>
 function renderCal(){
   id('calTitle').textContent=MONTHS[calMonth]+' '+calYear;
   const first=new Date(calYear,calMonth,1).getDay();
